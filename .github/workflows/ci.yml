@@ -24,9 +24,12 @@ jobs:
           - name: Linux x64
             os: ubuntu-latest
             artifact: st-linux-x64.tar.gz
-          - name: macOS arm64
+          - name: macOS universal
             os: macos-latest
-            artifact: st-macos-arm64.tar.gz
+            artifact: st-macos-universal.zip
+    env:
+      # Developer ID signing + notarization (see MACOS signing secrets); never on pull requests.
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.ASC_KEY_P8 != '' && github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,23 +42,100 @@ jobs:
         shell: pwsh
         run: ./build.ps1 -Test
 
-      - name: Build and test (macOS / Linux)
-        if: runner.os != 'Windows'
+      - name: Build and test (Linux)
+        if: runner.os == 'Linux'
         run: ./build.sh --test
 
+      - name: Build and test (macOS, universal arm64 + x86_64)
+        if: runner.os == 'macOS'
+        env:
+          ST_CMAKE_ARGS: -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
+        run: |
+          ./build.sh --test
+          lipo -info build/darwin/st
+
+      # ---------------------------------------------------------------- macOS signing
+      - name: Import signing certificate
+        if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_KEYCHAIN_PWD: ${{ secrets.MACOS_KEYCHAIN_PWD }}
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$MACOS_KEYCHAIN_PWD" build.keychain
+          security set-keychain-settings -lut 3600 build.keychain
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PWD" build.keychain
+          security list-keychains -d user -s build.keychain $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          # The Developer ID intermediate isn't always in the runner's keychains.
+          curl -fsSL -o DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import DeveloperIDG2CA.cer -k build.keychain || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_KEYCHAIN_PWD" build.keychain
+          rm certificate.p12 DeveloperIDG2CA.cer
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Sign st (Developer ID, hardened runtime)
+        if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --options runtime --timestamp --identifier com.glenrhodes.superterminal \
+            --sign "$MACOS_SIGNING_IDENTITY" build/darwin/st
+          codesign --verify --strict --verbose=2 build/darwin/st
+          codesign --display --verbose=2 build/darwin/st
+          build/darwin/st --version
+
+      - name: Notarize st
+        if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          # A bare command-line binary can't be stapled: Apple notarizes it inside a zip
+          # and Gatekeeper confirms the ticket online the first time it runs.
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          AUTH=(--key "$RUNNER_TEMP/AuthKey.p8" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+          mkdir -p notarize && cp build/darwin/st notarize/
+          ditto -c -k notarize st-notarize.zip
+          OUT=$(xcrun notarytool submit st-notarize.zip "${AUTH[@]}" --wait --timeout 30m --output-format json) || true
+          echo "$OUT"
+          ID=$(echo "$OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          STATUS=$(echo "$OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+          if [ "$STATUS" != "Accepted" ]; then
+            xcrun notarytool log "$ID" "${AUTH[@]}" || true
+            rm -f "$RUNNER_TEMP/AuthKey.p8"
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/AuthKey.p8" st-notarize.zip
+          rm -rf notarize
+          spctl --assess --type install --verbose=4 build/darwin/st || true
+          codesign --verify --strict --verbose=2 build/darwin/st
+
+      - name: Remove signing keychain
+        if: always() && runner.os == 'macOS' && env.HAS_SIGNING == 'true'
+        run: security delete-keychain build.keychain || true
+
+      # ---------------------------------------------------------------- package + release
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
-          if [[ "$RUNNER_OS" == Windows ]]; then
-            cp build/windows/Release/st.exe dist/
-            (cd dist && 7z a "../${{ matrix.artifact }}" st.exe >/dev/null)
-          else
-            os=$(uname -s | tr '[:upper:]' '[:lower:]')
-            cp "build/$os/st" dist/
-            tar -czf "${{ matrix.artifact }}" -C dist st
-          fi
-          cp LICENSE README.md dist/ 2>/dev/null || true
+          cp LICENSE README.md dist/
+          case "$RUNNER_OS" in
+            Windows)
+              cp build/windows/Release/st.exe dist/
+              (cd dist && 7z a "../${{ matrix.artifact }}" st.exe LICENSE README.md >/dev/null) ;;
+            macOS)
+              cp build/darwin/st dist/
+              (cd dist && ditto -c -k --sequesterRsrc . "../${{ matrix.artifact }}") ;;
+            Linux)
+              cp build/linux/st dist/
+              tar -czf "${{ matrix.artifact }}" -C dist st LICENSE README.md ;;
+          esac
+          ls -la "${{ matrix.artifact }}"
 
       - uses: actions/upload-artifact@v4
         with:

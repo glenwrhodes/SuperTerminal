@@ -69,7 +69,7 @@ export ANTHROPIC_API_KEY=sk-ant-...                          # macOS / Linux: ad
 setx ANTHROPIC_API_KEY sk-ant-...                            # Windows (or System Properties > Environment Variables)
 ```
 
-On macOS, a downloaded binary needs `xattr -d com.apple.quarantine st` before first run, because release builds aren't notarized yet.
+The macOS release is a universal binary (Apple silicon and Intel), signed with a Developer ID and notarized by Apple, so it runs without Gatekeeper warnings.
 
 ## Use it
 
