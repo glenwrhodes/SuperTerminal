@@ -58,7 +58,11 @@ if ($Test) {
     & $e2e $exe "build\e2e-pwsh.txt" @mode
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     # The WSL test needs an installed distro (CI machines have wsl.exe but none).
-    $hasDistro = (Get-Command wsl.exe -ErrorAction Ignore) -and ((wsl.exe -e true 2>$null) -or $LASTEXITCODE -eq 0)
+    $hasDistro = $false
+    if ((Get-Command wsl.exe -ErrorAction Ignore) -and -not $env:GITHUB_ACTIONS) {
+        & wsl.exe -e true *> $null
+        $hasDistro = $LASTEXITCODE -eq 0
+    }
     if ($hasDistro) {
         & $e2e $exe "build\e2e-wsl.txt" --shell wsl @mode
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
