@@ -114,9 +114,12 @@ def main():
     env.pop("ZDOTDIR")
     env.pop("PS1")
 
-    # For a zsh unpacked outside /usr (as in some CI images): tell it where its modules are.
-    if os.environ.get("ST_TEST_ZSH_MODULE_PATH"):
-        with open(os.path.join(home, ".zshenv"), "w") as f:
+    with open(os.path.join(home, ".zshenv"), "w") as f:
+        # Ubuntu's /etc/zsh/zshrc runs compinit, which stops to ask about "insecure
+        # directories" on machines like CI runners. Plain zsh would ask the same.
+        f.write("skip_global_compinit=1\n")
+        # For a zsh unpacked outside /usr: tell it where its modules are.
+        if os.environ.get("ST_TEST_ZSH_MODULE_PATH"):
             f.write("module_path=(%s)\n" % os.environ["ST_TEST_ZSH_MODULE_PATH"])
     posix = shell != "pwsh"
     prompt = {"bash": "$", "zsh": "%", "pwsh": "PS "}[shell]

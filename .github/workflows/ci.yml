@@ -54,6 +54,14 @@ jobs:
           ./build.sh --test
           lipo -info build/darwin/st
 
+      - name: Upload test transcripts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transcripts-${{ runner.os }}
+          path: build/e2e-*.txt
+          if-no-files-found: ignore
+
       # ---------------------------------------------------------------- macOS signing
       - name: Import signing certificate
         if: runner.os == 'macOS' && env.HAS_SIGNING == 'true'
