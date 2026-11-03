@@ -53,7 +53,8 @@ if ($Test) {
     python tests\route_tests.py $exe
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     $e2e = Join-Path $PSScriptRoot "$build\Release\st_e2e.exe"
-    $mode = if ($Live) { @() } else { @('--offline') }
+    $mode = @()   # (an if-expression would unwrap a one-item array into a string)
+    if (-not $Live) { $mode += '--offline' }
     & $e2e $exe "build\e2e-pwsh.txt" @mode
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     # The WSL test needs an installed distro (CI machines have wsl.exe but none).
