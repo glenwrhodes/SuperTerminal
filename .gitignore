@@ -1,0 +1,9 @@
+build/
+out/
+dist/
+.vs/
+.vscode/
+*.user
+e2e-transcript.txt
+__pycache__/
+*.tmp

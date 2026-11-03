@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # attach binaries to releases
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            artifact: st-windows-x64.zip
+          - name: Linux x64
+            os: ubuntu-latest
+            artifact: st-linux-x64.tar.gz
+          - name: macOS arm64
+            os: macos-latest
+            artifact: st-macos-arm64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libcurl4-openssl-dev zsh
+
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./build.ps1 -Test
+
+      - name: Build and test (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: ./build.sh --test
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            cp build/windows/Release/st.exe dist/
+            (cd dist && 7z a "../${{ matrix.artifact }}" st.exe >/dev/null)
+          else
+            os=$(uname -s | tr '[:upper:]' '[:lower:]')
+            cp "build/$os/st" dist/
+            tar -czf "${{ matrix.artifact }}" -C dist st
+          fi
+          cp LICENSE README.md dist/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "SuperTerminal $GITHUB_REF_NAME" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" "${{ matrix.artifact }}" --clobber
