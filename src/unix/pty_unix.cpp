@@ -9,7 +9,10 @@
 #include <unistd.h>
 
 #if defined(__APPLE__)
-#include <util.h>
+// forkpty lives in the system <util.h>, which our own src/util.h shadows on the include path.
+struct termios;
+struct winsize;
+extern "C" int forkpty(int*, char*, struct termios*, struct winsize*);
 #else
 #include <pty.h>
 #endif

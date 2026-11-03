@@ -27,7 +27,7 @@ if (-not $cmake -or -not (Test-Path $cmake)) {
 }
 
 $build = 'build\windows'
-if (-not (Test-Path "$build\CMakeCache.txt")) { & $cmake -S . -B $build -G 'Visual Studio 17 2022' -A x64 }
+if (-not (Test-Path "$build\CMakeCache.txt")) { & $cmake -S . -B $build -A x64   # newest installed Visual Studio }
 & $cmake --build $build --config Release
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $exe = Join-Path $PSScriptRoot "$build\Release\st.exe"

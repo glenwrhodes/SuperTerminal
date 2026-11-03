@@ -5,16 +5,16 @@
 #
 #   pwsh -NoProfile -File tests\route-tests.ps1 [-Exe build\Release\st.exe]
 
-param([string]$Exe = "$PSScriptRoot\..\build\windows\Release\st.exe")
+param([string]$Exe = (Join-Path $PSScriptRoot ".." "build" "windows" "Release" "st.exe"))
 $ErrorActionPreference = 'Stop'
 
 # Load Get-STAnalysis straight out of the shim.
-$shim = "$PSScriptRoot\..\shell\superterminal.ps1"
+$shim = Join-Path $PSScriptRoot ".." "shell" "superterminal.ps1"
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($shim, [ref]$null, [ref]$null)
 $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-STAnalysis' }, $true)
 . ([scriptblock]::Create($fn.Extent.Text))
 
-Push-Location $PSScriptRoot\..   # a FileSystem location, like a real session
+Push-Location (Join-Path $PSScriptRoot "..")   # a FileSystem location, like a real session
 try {
     # line -> expected: $true = goes to Claude, $false = PowerShell runs it as typed
     $routeCases = [ordered]@{
@@ -34,8 +34,9 @@ try {
         '!! show me the files'                       = $false
         'show me all the docx files in this folder'  = $true
         'dir /w'                                     = $true
-        'ls -la'                                     = $true
-        'rm -rf build'                               = $true
+        # On macOS/Linux, ls and rm are the real programs (no PowerShell aliases), so these are valid there.
+        'ls -la'                                     = [bool]$IsWindows
+        'rm -rf build'                               = [bool]$IsWindows
         'sort these by size'                         = $true
         'where is python'                            = $true
         'start the server'                           = $true
