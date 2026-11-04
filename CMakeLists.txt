@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(SuperTerminal VERSION 0.3.0 LANGUAGES CXX)
+project(SuperTerminal VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +60,14 @@ endif()
 
 add_executable(st src/main.cpp)
 target_link_libraries(st PRIVATE stcore)
+
+if(WIN32)
+    # Icon and version details, so Explorer, the Start menu and Installed apps show "SuperTerminal".
+    set(ST_ICON "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/st.ico")
+    configure_file(packaging/windows/st.rc.in "${CMAKE_CURRENT_BINARY_DIR}/st.rc" @ONLY)
+    target_sources(st PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/st.rc")
+    set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/st.rc" APPEND PROPERTY OBJECT_DEPENDS "${ST_ICON}")
+endif()
 
 if(WIN32)
     # End-to-end test: runs st.exe inside its own pseudo console and types at it.

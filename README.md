@@ -48,12 +48,22 @@ No chat window, no copy-paste, no new commands to learn. You see the real comman
 
 ## Install
 
-**Download** a binary from [Releases](https://github.com/glenwrhodes/SuperTerminal/releases) and put it on your PATH, or **build from source** (about a minute):
+**Windows:** download **`SuperTerminal-Setup-<version>-x64.exe`** from [Releases](https://github.com/glenwrhodes/SuperTerminal/releases) and run it. It installs for just you (no admin prompt) or for everyone, then:
+
+- adds SuperTerminal to the Start menu: press <kbd>Win</kbd>, type *SuperTerminal*, and pick **Open** or **Run as administrator**
+- puts `st` on your PATH
+- adds SuperTerminal to Windows Terminal's profile list
+- lists it in Settings → Apps → Installed apps, where you can uninstall it
+
+The installer isn't code-signed, so SmartScreen may say "Windows protected your PC": click **More info → Run anyway**. Silent install: `SuperTerminal-Setup-<version>-x64.exe /VERYSILENT` (add `/ALLUSERS` for everyone).
+
+**macOS and Linux:** download the binary from [Releases](https://github.com/glenwrhodes/SuperTerminal/releases) and put it on your PATH. **Or build from source** on any platform (about a minute):
 
 ```powershell
 # Windows: Visual Studio 2022 or its Build Tools (C++ workload)
 git clone https://github.com/glenwrhodes/SuperTerminal; cd SuperTerminal
 pwsh -File build.ps1 -Install     # builds, puts st.exe on PATH, adds Windows Terminal profiles
+pwsh -File build.ps1 -Installer   # or: builds the installer into build\installer (needs Inno Setup 6)
 ```
 
 ```bash
@@ -146,6 +156,7 @@ Settings live in `~/.config/superterminal/settings.json` (Windows: `%APPDATA%\Su
 ```bash
 ./build.sh --test             # macOS / Linux: routing + safety tests, end-to-end tests in every installed shell
 pwsh -File build.ps1 -Test    # Windows: same, plus WSL if a distro is installed
+pwsh -File build.ps1 -Test -Installer   # ...plus build the installer, install it silently, check it, uninstall it
 #   add --live / -Live to include real translation requests (uses your key; costs a fraction of a cent)
 ```
 
@@ -157,7 +168,8 @@ The end-to-end tests run `st` in a pseudo terminal and type at it like a person:
 | `src/brain.*`, `src/router*.cpp`, `src/safety.cpp` | routing, translation requests, auto-run safety (PowerShell and POSIX) |
 | `src/win/`, `src/unix/` | pseudo terminal host, IPC and HTTPS for each platform |
 | `shell/superterminal.{ps1,bash,zsh}` | the shell integrations, compiled into the binary |
-| `tests/` | routing/safety cases, Windows and Unix end-to-end harnesses |
+| `packaging/windows/` | the installer (Inno Setup), app icon and version resource |
+| `tests/` | routing/safety cases, Windows and Unix end-to-end harnesses, installer check |
 
 ## Known limitations
 

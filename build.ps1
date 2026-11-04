@@ -5,10 +5,13 @@
 #   pwsh -File build.ps1 -Test -Live     ...plus real plain-English requests (needs ANTHROPIC_API_KEY)
 #   pwsh -File build.ps1 -Install        ...then copy st.exe to %LOCALAPPDATA%\Programs\SuperTerminal,
 #                                           add it to your PATH and to Windows Terminal's profile list
+#   pwsh -File build.ps1 -Installer      ...then build the installer, build\installer\SuperTerminal-Setup-<ver>-x64.exe
+#                                           (needs Inno Setup 6: winget install JRSoftware.InnoSetup).
+#                                           With -Test it also installs it silently, checks it and uninstalls it.
 #
 # Needs Visual Studio 2022 (or its Build Tools) with the "Desktop development with C++" workload.
 # CMake comes with it; nothing else to install.
-param([switch]$Test, [switch]$Live, [switch]$Install)
+param([switch]$Test, [switch]$Live, [switch]$Install, [switch]$Installer)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
@@ -65,6 +68,36 @@ if ($Test) {
     }
     if ($hasDistro) {
         & $e2e $exe "build\e2e-wsl.txt" --shell wsl @mode
+        if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    }
+}
+
+if ($Installer) {
+    function Find-Iscc {
+        $found = Get-Command iscc -ErrorAction Ignore | ForEach-Object Source
+        if ($found) { return $found }
+        foreach ($root in "${env:ProgramFiles(x86)}", $env:ProgramFiles, "$env:LOCALAPPDATA\Programs") {
+            $candidate = Join-Path $root 'Inno Setup 6\ISCC.exe'
+            if ($root -and (Test-Path $candidate)) { return $candidate }
+        }
+    }
+    $iscc = Find-Iscc
+    if (-not $iscc -and $env:GITHUB_ACTIONS) {
+        choco install innosetup -y --no-progress | Out-Null
+        $iscc = Find-Iscc
+    }
+    if (-not $iscc) {
+        Write-Host "Inno Setup 6 isn't installed. Get it with:  winget install JRSoftware.InnoSetup" -ForegroundColor Yellow
+        exit 1
+    }
+    $version = ((& $exe --version) -split ' ')[-1]
+    $out = Join-Path $PSScriptRoot 'build\installer'
+    & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$(Split-Path $exe)" "/DOutputDir=$out" packaging\windows\superterminal.iss
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    $setup = Join-Path $out "SuperTerminal-Setup-$version-x64.exe"
+    "Built $setup"
+    if ($Test) {
+        pwsh -NoProfile -File tests\installer-test.ps1 -Setup $setup -Version $version
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
     }
 }

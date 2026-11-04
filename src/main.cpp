@@ -290,14 +290,18 @@ int install_terminal_profile(bool install) {
         return 0;
     }
     std::string exe = self_exe_path();
+    // The installer puts st.ico next to st.exe; Windows Terminal shows it on the tab and in the menu.
+    fs::path ico = path_from_utf8(exe).parent_path() / "st.ico";
+    auto profile = [&](const char* name, const char* shell) {
+        json p = {{"name", name},
+                  {"commandline", "\"" + exe + "\" --shell " + shell},
+                  {"startingDirectory", "%USERPROFILE%"}};
+        if (fs::exists(ico, ec)) p["icon"] = path_to_utf8(ico);
+        return p;
+    };
     json profiles = json::array();
-    profiles.push_back({{"name", "SuperTerminal"},
-                        {"commandline", "\"" + exe + "\" --shell pwsh"},
-                        {"startingDirectory", "%USERPROFILE%"}});
-    if (!find_in_path("wsl").empty())
-        profiles.push_back({{"name", "SuperTerminal (WSL)"},
-                            {"commandline", "\"" + exe + "\" --shell wsl"},
-                            {"startingDirectory", "%USERPROFILE%"}});
+    profiles.push_back(profile("SuperTerminal", "pwsh"));
+    if (!find_in_path("wsl").empty()) profiles.push_back(profile("SuperTerminal (WSL)", "wsl"));
     fs::create_directories(file.parent_path(), ec);
     std::ofstream f(file, std::ios::trunc);
     f << json{{"profiles", profiles}}.dump(2) << "\n";

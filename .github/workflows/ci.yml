@@ -34,10 +34,10 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake libcurl4-openssl-dev zsh
 
-      - name: Build and test (Windows)
+      - name: Build and test, then build and test the installer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./build.ps1 -Test
+        run: ./build.ps1 -Test -Installer
 
       - name: Build and test (Linux)
         if: runner.os == 'Linux'
@@ -56,7 +56,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: transcripts-${{ runner.os }}
-          path: build/e2e-*.txt
+          path: |
+            build/e2e-*.txt
+            build/installer/install.log
           if-no-files-found: ignore
 
       # ---------------------------------------------------------------- package + release
@@ -83,6 +85,13 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
+      - name: Upload installer (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperTerminal-Setup-x64
+          path: build/installer/SuperTerminal-Setup-*.exe
+
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -92,3 +101,6 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --title "SuperTerminal $GITHUB_REF_NAME" --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "${{ matrix.artifact }}" --clobber
+          if [ "$RUNNER_OS" = Windows ]; then
+            gh release upload "$GITHUB_REF_NAME" build/installer/SuperTerminal-Setup-*.exe --clobber
+          fi
