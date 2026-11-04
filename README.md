@@ -17,6 +17,10 @@
 
 ---
 
+<p align="center">
+  <img src="docs/superterminal.gif" alt="SuperTerminal in PowerShell: typing &quot;show me the biggest files&quot; turns into a Get-ChildItem | Sort-Object command and runs" width="640">
+</p>
+
 SuperTerminal is a single small C++ binary, `st`, that runs **your real shell** (PowerShell, bash, zsh, or bash inside WSL) and adds one superpower: anything you type that isn't a command gets turned into one.
 
 ```text
